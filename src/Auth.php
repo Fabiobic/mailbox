@@ -42,7 +42,8 @@ class Auth
     public static function require(): void
     {
         if (!self::check()) {
-            header('Location: ' . APP_URL . '/public/login.php');
+            // Redirect relativo: funziona sia con Apache che con PHP built-in server
+            header('Location: login.php');
             exit;
         }
     }

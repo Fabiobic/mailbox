@@ -1,25 +1,15 @@
-# Blocca accesso diretto alla cartella storage
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-
-    # Blocca accesso a .env
-    RewriteRule ^\.env - [F,L]
-
-    # Blocca accesso a vendor/
-    RewriteRule ^vendor/ - [F,L]
-
-    # Blocca accesso a storage/
-    RewriteRule ^storage/ - [F,L]
-
-    # Blocca accesso a src/
-    RewriteRule ^src/ - [F,L]
-
-    # Blocca accesso a config/
-    RewriteRule ^config/ - [F,L]
-</IfModule>
-
-# Disabilita directory listing
 Options -Indexes
 
-# Charset
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Blocca accesso diretto a file/cartelle sensibili
+    RewriteRule ^\.env - [F,L]
+    RewriteRule ^vendor/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^src/ - [F,L]
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^scripts/ - [F,L]
+    RewriteRule ^database/ - [F,L]
+</IfModule>
+
 AddDefaultCharset UTF-8
