@@ -17,14 +17,40 @@ class EmailParser
     }
 
     /**
+     * Analizza una stringa raw di email (da mbox) e restituisce i dati strutturati
+     */
+    public function parseFromString(string $rawEmail): array
+    {
+        // Non chiudere lo stream prima di estrarre i dati:
+        // zbateson usa lazy loading e legge lo stream in modo differito.
+        $stream  = fopen('php://temp', 'r+');
+        fwrite($stream, $rawEmail);
+        rewind($stream);
+        $message = $this->parser->parse($stream, false);
+        $data    = $this->extractData($message, strlen($rawEmail));
+        fclose($stream);
+
+        return $data;
+    }
+
+    /**
      * Analizza un file .eml e restituisce i dati strutturati dell'email
      */
     public function parse(string $emlFilePath): array
     {
         $handle  = fopen($emlFilePath, 'r');
         $message = $this->parser->parse($handle, false);
+        $data    = $this->extractData($message, filesize($emlFilePath) ?: 0);
         fclose($handle);
 
+        return $data;
+    }
+
+    /**
+     * Estrae i dati strutturati da un oggetto Message parsato
+     */
+    private function extractData(\ZBateson\MailMimeParser\Message $message, int $sizeBytes): array
+    {
         // Data email
         $emailDate = null;
         $rawDate   = $message->getHeaderValue('date');
@@ -49,9 +75,6 @@ class EmailParser
         // Allegati
         $attachments    = $this->extractAttachments($message);
         $hasAttachments = count($attachments) > 0;
-
-        // Dimensione file .eml
-        $sizeBytes = filesize($emlFilePath) ?: 0;
 
         return [
             'message_id'       => $msgId   ?: null,
