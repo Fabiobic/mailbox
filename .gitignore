@@ -1,0 +1,29 @@
+# Dependencies
+/vendor/
+
+# Environment
+.env
+.env.local
+
+# Storage (uploaded files, extracted emails, attachments)
+/storage/pst/
+/storage/eml/
+/storage/attachments/
+
+# PST & EML files (can be very large)
+*.pst
+*.eml
+*.mbox
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+/logs/
