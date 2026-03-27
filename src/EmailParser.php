@@ -4,53 +4,62 @@ declare(strict_types=1);
 
 namespace Mailbox;
 
-use PhpMimeMailParser\Parser;
+use ZBateson\MailMimeParser\MailMimeParser;
+use ZBateson\MailMimeParser\Message;
 
 class EmailParser
 {
+    private MailMimeParser $parser;
+
+    public function __construct()
+    {
+        $this->parser = new MailMimeParser();
+    }
+
     /**
      * Analizza un file .eml e restituisce i dati strutturati dell'email
      */
     public function parse(string $emlFilePath): array
     {
-        $parser = new Parser();
-        $parser->setPath($emlFilePath);
+        $handle  = fopen($emlFilePath, 'r');
+        $message = $this->parser->parse($handle, false);
+        fclose($handle);
 
         // Data email
-        $rawDate   = $parser->getHeader('date');
         $emailDate = null;
+        $rawDate   = $message->getHeaderValue('date');
         if ($rawDate) {
-            $ts = strtotime($rawDate);
+            $ts        = strtotime($rawDate);
             $emailDate = $ts ? date('Y-m-d H:i:s', $ts) : null;
         }
 
-        // Pulizia indirizzi email
-        $from    = $this->cleanHeader($parser->getHeader('from'));
-        $to      = $this->cleanHeader($parser->getHeader('to'));
-        $cc      = $this->cleanHeader($parser->getHeader('cc'));
-        $bcc     = $this->cleanHeader($parser->getHeader('bcc'));
-        $replyTo = $this->cleanHeader($parser->getHeader('reply-to'));
-        $subject = $this->cleanHeader($parser->getHeader('subject'));
-        $msgId   = $this->cleanHeader($parser->getHeader('message-id'));
+        // Header principali
+        $from    = $this->cleanHeader($message->getHeaderValue('from'));
+        $to      = $this->cleanHeader($message->getHeaderValue('to'));
+        $cc      = $this->cleanHeader($message->getHeaderValue('cc'));
+        $bcc     = $this->cleanHeader($message->getHeaderValue('bcc'));
+        $replyTo = $this->cleanHeader($message->getHeaderValue('reply-to'));
+        $subject = $this->cleanHeader($message->getHeaderValue('subject'));
+        $msgId   = $this->cleanHeader($message->getHeaderValue('message-id'));
 
         // Corpo email
-        $bodyText = $parser->getMessageBody('text') ?: null;
-        $bodyHtml = $parser->getMessageBody('html') ?: null;
+        $bodyText = $message->getTextContent() ?: null;
+        $bodyHtml = $message->getHtmlContent() ?: null;
 
         // Allegati
-        $attachments    = $this->extractAttachments($parser);
+        $attachments    = $this->extractAttachments($message);
         $hasAttachments = count($attachments) > 0;
 
         // Dimensione file .eml
         $sizeBytes = filesize($emlFilePath) ?: 0;
 
         return [
-            'message_id'       => $msgId ?: null,
-            'from_address'     => $from   ?: 'sconosciuto@unknown.com',
+            'message_id'       => $msgId   ?: null,
+            'from_address'     => $from    ?: 'sconosciuto@unknown.com',
             'from_name'        => $this->extractName($from),
-            'to_address'       => $to     ?: '',
-            'cc_address'       => $cc     ?: null,
-            'bcc_address'      => $bcc    ?: null,
+            'to_address'       => $to      ?: '',
+            'cc_address'       => $cc      ?: null,
+            'bcc_address'      => $bcc     ?: null,
             'reply_to'         => $replyTo ?: null,
             'subject'          => $subject ?: '(senza oggetto)',
             'body_text'        => $bodyText,
@@ -66,31 +75,33 @@ class EmailParser
     /**
      * Estrae e salva gli allegati in storage/attachments/
      */
-    private function extractAttachments(Parser $parser): array
+    private function extractAttachments(Message $message): array
     {
-        $attachments  = $parser->getAttachments();
-        $attachDir    = STORAGE_PATH . '/attachments/';
-        $result       = [];
+        $attachDir = STORAGE_PATH . '/attachments/';
+        $result    = [];
 
         if (!is_dir($attachDir)) {
             mkdir($attachDir, 0755, true);
         }
 
-        foreach ($attachments as $att) {
+        $attachmentCount = $message->getAttachmentCount();
+        for ($i = 0; $i < $attachmentCount; $i++) {
+            $att          = $message->getAttachmentPart($i);
             $originalName = $att->getFilename() ?: 'allegato_' . uniqid();
             $safeName     = preg_replace('/[^a-zA-Z0-9._\-]/', '_', basename($originalName));
             $uniqueName   = uniqid('att_') . '_' . $safeName;
             $destPath     = $attachDir . $uniqueName;
 
-            $content = $att->getContent();
-            file_put_contents($destPath, $content);
+            $content = $att->getBinaryContentResourceHandle();
+            $rawContent = stream_get_contents($content);
+            file_put_contents($destPath, $rawContent);
 
             $result[] = [
                 'filename'     => $originalName,
                 'content_type' => $att->getContentType() ?: 'application/octet-stream',
                 'file_path'    => 'attachments/' . $uniqueName,
-                'file_size'    => strlen($content),
-                'checksum_md5' => md5($content),
+                'file_size'    => strlen($rawContent),
+                'checksum_md5' => md5($rawContent),
             ];
         }
 
@@ -102,6 +113,9 @@ class EmailParser
      */
     private function cleanHeader(mixed $value): string
     {
+        if ($value === null) {
+            return '';
+        }
         if (is_array($value)) {
             $value = implode(', ', $value);
         }
